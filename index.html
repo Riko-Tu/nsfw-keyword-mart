@@ -32,16 +32,59 @@
     .card-actions button { flex:1; padding:8px; font-size:1rem; border:none; border-radius:6px; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px; }
     .btn-copy { background:#28a745; color:#fff; }
     .btn-cart { background:#007bff; color:#fff; }
-    .count-tag { color:#ff6b6b; font-size:0.8rem; }
     .loading { text-align:center; padding:40px; color:#666; }
     .status { position:fixed; top:10px; right:10px; background:#28a745; color:#fff; padding:6px 12px; border-radius:20px; font-size:0.8rem; z-index:1000; }
+
+    /* 新增弹窗样式 */
+    #addModal {
+      display:none; position:fixed; inset:0; background:rgba(0,0,0,0.8); z-index:1000; 
+      display:flex; align-items:center; justify-content:center;
+    }
+    .modal-content {
+      background:#1e1e1e; padding:24px; border-radius:16px; width:90%; max-width:460px; color:#eee;
+      box-shadow:0 10px 30px rgba(0,0,0,0.5);
+    }
+    .form-group {
+      display:flex; flex-direction:column; gap:6px; margin-bottom:16px;
+    }
+    .form-group label {
+      font-size:0.9rem; color:#ccc;
+    }
+    .form-group input, .form-group select {
+      padding:10px; border-radius:8px; border:none; background:#2a2a2a; color:#fff; font-size:1rem;
+    }
+    .img-row {
+      display:flex; gap:12px; align-items:flex-start;
+    }
+    .img-preview {
+      flex:1; height:120px; background:#2a2a2a; border-radius:8px; overflow:hidden; 
+      display:flex; align-items:center; justify-content:center; position:relative;
+    }
+    .img-preview img {
+      max-width:100%; max-height:100%; object-fit:contain;
+    }
+    .img-actions {
+      display:flex; flex-direction:column; gap:8px; width:120px;
+    }
+    .img-actions button {
+      padding:8px; font-size:0.85rem; border:none; border-radius:6px; cursor:pointer;
+    }
+    .btn-upload { background:#007bff; color:#fff; }
+    .btn-upload:disabled { background:#555; cursor:not-allowed; }
+    .modal-footer {
+      display:flex; gap:12px; margin-top:20px;
+    }
+    .modal-footer button {
+      flex:1; padding:12px; border:none; border-radius:8px; font-weight:bold; cursor:pointer;
+    }
+    .btn-cancel { background:#555; color:#fff; }
+    .btn-confirm { background:#007bff; color:#fff; }
     @media (max-width:768px) { .container { flex-direction:column; } .sidebar { width:100%; max-height:200px; } }
   </style>
 </head>
 <body>
   <div class="header">NSFW 关键词超市</div>
 
-  <!-- 顶部控制栏 -->
   <div class="controls" style="padding:10px; background:#1a1a1a; flex-wrap:wrap;">
     <button onclick="addNewWord()">新增关键词</button>
     <button onclick="exportJSON()">导出 JSON</button>
@@ -51,27 +94,49 @@
 
   <div id="status" class="status" style="display:none;"></div>
 
-  <!-- 新增关键词弹窗（表格化） -->
-  <div id="addModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.8); z-index:1000; display:flex; align-items:center; justify-content:center;">
-    <div style="background:#1e1e1e; padding:24px; border-radius:12px; width:90%; max-width:420px; color:#eee;">
-      <h3 style="margin-bottom:16px;">新增 NSFW 关键词</h3>
-      <div style="display:grid; gap:12px;">
-        <input type="text" id="newWord" placeholder="英文关键词 (e.g., large breasts)" style="padding:10px; border-radius:6px; border:none; background:#333; color:#fff;">
-        <input type="text" id="newZh" placeholder="中文翻译 (e.g., 巨乳)" style="padding:10px; border-radius:6px; border:none; background:#333; color:#fff;">
-        <input type="number" id="newStrength" placeholder="强度 (0.1-1.0)" step="0.1" min="0" max="1" value="0.8" style="padding:10px; border-radius:6px; border:none; background:#333; color:#fff;">
-        <input type="number" id="newCopy" placeholder="初始复制数" value="0" style="padding:10px; border-radius:6px; border:none; background:#333; color:#fff;">
-        
-        <div style="display:flex; flex-direction:column; gap:8px;">
-          <input type="file" id="imgUpload" accept="image/*" style="color:#fff;">
-          <div id="imgPreview" style="height:100px; background:#333; border-radius:6px; overflow:hidden; display:flex; align-items:center; justify-content:center;">
+  <!-- 新增关键词弹窗（升级版） -->
+  <div id="addModal">
+    <div class="modal-content">
+      <h3 style="margin-bottom:20px; text-align:center;">新增 NSFW 关键词</h3>
+      
+      <div class="form-group">
+        <label>目标标签路径</label>
+        <select id="targetPath"></select>
+      </div>
+
+      <div class="form-group">
+        <label>英文关键词</label>
+        <input type="text" id="newWord" placeholder="e.g., large breasts">
+      </div>
+
+      <div class="form-group">
+        <label>中文翻译</label>
+        <input type="text" id="newZh" placeholder="e.g., 巨乳">
+      </div>
+
+      <div class="form-group">
+        <label>强度 (0.1 - 1.0)</label>
+        <input type="number" id="newStrength" step="0.1" min="0.1" max="1.0" value="0.8">
+      </div>
+
+      <div class="form-group">
+        <label>图片</label>
+        <div class="img-row">
+          <div class="img-preview" id="imgPreview">
             <small style="color:#666;">预览将显示在这里</small>
           </div>
-          <small style="color:#aaa; font-size:0.8rem;">上传到 Litterbox (免费、永久、支持 NSFW)</small>
+          <div class="img-actions">
+            <input type="file" id="imgUpload" accept="image/*" style="display:none;">
+            <button class="btn-upload" id="btnSelectImg">选择图片</button>
+            <button class="btn-upload" id="btnGetUrl" disabled>获取 URL</button>
+          </div>
         </div>
+        <small style="color:#aaa; margin-top:8px;">上传到 Litterbox (免费、永久、支持 NSFW)</small>
       </div>
-      <div style="display:flex; gap:12px; margin-top:20px;">
-        <button onclick="closeModal()" style="flex:1; padding:10px; background:#666; color:#fff; border:none; border-radius:6px;">取消</button>
-        <button onclick="confirmAdd()" style="flex:1; padding:10px; background:#007bff; color:#fff; border:none; border-radius:6px;">确认添加</button>
+
+      <div class="modal-footer">
+        <button class="btn-cancel" onclick="closeModal()">取消</button>
+        <button class="btn-confirm" onclick="confirmAdd()">确认添加</button>
       </div>
     </div>
   </div>
@@ -106,7 +171,7 @@
   </div>
 
   <script>
-    // === 你的专属配置（替换这 2 行）===
+    // === 配置 ===
     const BIN_ID = '690f2ed2d0ea881f40db9bc3';
     const MASTER_KEY = '$2a$10$xnT36sEdgvmYUqMghhjHuuDn.ErHF2gpSRxGohHLUJ5HUg8/Z3XEq';
 
@@ -115,6 +180,8 @@
     let currentItems = [];
     let cart = JSON.parse(localStorage.getItem('nsfw-cart') || '[]');
     let copyCounts = JSON.parse(localStorage.getItem('nsfw-copies') || '{}');
+    let selectedFile = null;
+    let uploadedUrl = '';
 
     function showStatus(msg, isError = false) {
       const el = document.getElementById('status');
@@ -124,7 +191,7 @@
       setTimeout(() => el.style.display = 'none', 2000);
     }
 
-    // === 云端加载 ===
+    // === 云端读写 ===
     async function loadData() {
       try {
         const res = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`, {
@@ -135,6 +202,7 @@
         document.querySelector('.sidebar .loading').style.display = 'none';
         document.getElementById('navTree').style.display = 'block';
         buildNav(treeData, document.getElementById('navTree'));
+        buildPathSelector();
         goTo([]);
         renderCart();
         showStatus('云端数据加载成功！');
@@ -143,7 +211,6 @@
       }
     }
 
-    // === 云端保存 ===
     async function saveData() {
       try {
         const res = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}`, {
@@ -161,13 +228,10 @@
       }
     }
 
-    // === Litterbox 永久上传（极速 + 永久）===
+    // === Litterbox 永久上传 ===
     async function uploadToLitterbox(file) {
-      if (!file) return '';
       const form = new FormData();
       form.append('fileToUpload', file);
-      // 不传 time → 永久保存
-
       try {
         const res = await fetch('https://litterbox.catbox.moe/resources/internals/api.php', {
           method: 'POST',
@@ -180,65 +244,104 @@
           throw new Error(url);
         }
       } catch (e) {
-        alert('上传失败: ' + e.message);
-        return '';
+        throw new Error('上传失败: ' + e.message);
       }
     }
 
-    // === 新增关键词弹窗 ===
+    // === 构建路径下拉选项 ===
+    function buildPathSelector() {
+      const select = document.getElementById('targetPath');
+      select.innerHTML = '';
+      function traverse(node, path = []) {
+        if (Array.isArray(node)) {
+          const fullPath = path.join(' → ');
+          const opt = document.createElement('option');
+          opt.value = JSON.stringify(path);
+          opt.textContent = fullPath || '根目录';
+          select.appendChild(opt);
+        } else if (typeof node === 'object') {
+          for (const key in node) {
+            traverse(node[key], [...path, key]);
+          }
+        }
+      }
+      traverse(treeData);
+    }
+
+    // === 新增弹窗控制 ===
     function addNewWord() {
       document.getElementById('addModal').style.display = 'flex';
-      document.getElementById('imgPreview').innerHTML = '<small style="color:#666;">预览将显示在这里</small>';
       document.getElementById('newWord').value = '';
       document.getElementById('newZh').value = '';
       document.getElementById('newStrength').value = '0.8';
-      document.getElementById('newCopy').value = '0';
-      document.getElementById('imgUpload').value = '';
+      document.getElementById('imgPreview').innerHTML = '<small style="color:#666;">预览将显示在这里</small>';
+      document.getElementById('btnGetUrl').disabled = true;
+      selectedFile = null;
+      uploadedUrl = '';
+      buildPathSelector();
     }
 
     function closeModal() {
       document.getElementById('addModal').style.display = 'none';
     }
 
-    // 图片预览
-    document.getElementById('imgUpload').addEventListener('change', e => {
+    // 选择图片
+    document.getElementById('btnSelectImg').onclick = () => {
+      document.getElementById('imgUpload').click();
+    };
+
+    document.getElementById('imgUpload').onchange = e => {
       const file = e.target.files[0];
       if (!file) return;
+      selectedFile = file;
       const reader = new FileReader();
       reader.onload = ev => {
-        document.getElementById('imgPreview').innerHTML = `<img src="${ev.target.result}" style="max-width:100%; max-height:100%; object-fit:contain;">`;
+        document.getElementById('imgPreview').innerHTML = `<img src="${ev.target.result}">`;
+        document.getElementById('btnGetUrl').disabled = false;
       };
       reader.readAsDataURL(file);
-    });
+    };
 
-    // 确认添加 + 上传图片
+    // 获取 URL
+    document.getElementById('btnGetUrl').onclick = async () => {
+      if (!selectedFile) return;
+      document.getElementById('btnGetUrl').disabled = true;
+      document.getElementById('btnGetUrl').textContent = '上传中...';
+      try {
+        uploadedUrl = await uploadToLitterbox(selectedFile);
+        document.getElementById('imgPreview').innerHTML = `<img src="${uploadedUrl}">`;
+        showStatus('URL 获取成功！');
+        document.getElementById('btnGetUrl').textContent = '已获取';
+      } catch (e) {
+        alert(e.message);
+        document.getElementById('btnGetUrl').textContent = '获取 URL';
+        document.getElementById('btnGetUrl').disabled = false;
+      }
+    };
+
+    // 确认添加
     async function confirmAdd() {
       const word = document.getElementById('newWord').value.trim();
       const zh = document.getElementById('newZh').value.trim();
       const strength = parseFloat(document.getElementById('newStrength').value) || 0.8;
-      const copy = parseInt(document.getElementById('newCopy').value) || 0;
-      const file = document.getElementById('imgUpload').files[0];
+      const pathStr = document.getElementById('targetPath').value;
+      const path = JSON.parse(pathStr);
 
       if (!word) return alert('关键词不能为空！');
-
-      let imgUrl = '';
-      if (file) {
-        showStatus('上传图片到 Litterbox...');
-        imgUrl = await uploadToLitterbox(file);
-        if (!imgUrl) return;
-        showStatus('图片上传成功！');
-      }
+      if (path.length === 0) return alert('请选择目标标签！');
 
       const newItem = {
         "词": word,
         "强度": strength,
-        "图": imgUrl,
-        "复制": copy,
+        "图": uploadedUrl,
+        "复制": 0,
         "词2": zh
       };
 
       let node = treeData;
-      currentPath.forEach(p => node = node[p]);
+      for (const p of path) {
+        node = node[p];
+      }
       if (Array.isArray(node)) {
         node.push(newItem);
         renderCards();
@@ -246,11 +349,11 @@
         closeModal();
         showStatus('关键词添加成功！');
       } else {
-        alert("只能在末级分类添加！");
+        alert("目标路径不是数组，无法添加！");
       }
     }
 
-    // === 导航与渲染 ===
+    // === 导航与渲染（保持不变）===
     function buildNav(node, parent, path=[]) {
       Object.keys(node).forEach(key => {
         const li = document.createElement('li');
@@ -316,8 +419,8 @@
               </div>
               <div class="card-subtitle">${subtitle} · 强度: ${item.强度 || '-'}</div>
               <div class="card-actions">
-                <button class="btn-copy" onclick="event.stopPropagation(); copyWord('${word}')"><i class="fas fa-copy"></i></button>
-                <button class="btn-cart" onclick="event.stopPropagation(); addToCart('${word}')"><i class="fas fa-plus"></i></button>
+                <button class="btn-copy" onclick="event.stopPropagation(); copyWord('${word}')">Copy</button>
+                <button class="btn-cart" onclick="event.stopPropagation(); addToCart('${word}')">Add</button>
               </div>
             </div>
           </div>
@@ -398,6 +501,7 @@
         try {
           treeData = JSON.parse(ev.target.result);
           buildNav(treeData, document.getElementById('navTree'));
+          buildPathSelector();
           goTo(currentPath);
           saveData();
           alert('导入并保存成功！');
