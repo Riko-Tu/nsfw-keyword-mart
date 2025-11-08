@@ -41,7 +41,6 @@
 <body>
   <div class="header">NSFW 关键词超市</div>
 
-  <!-- 顶部控制栏 -->
   <div class="controls" style="padding:10px; background:#1a1a1a; flex-wrap:wrap;">
     <button onclick="addNewWord()">新增关键词</button>
     <button onclick="exportJSON()">导出 JSON</button>
@@ -81,9 +80,10 @@
   </div>
 
   <script>
-    // === JSONBin 配置 ===
+    // === 你的专属配置 ===
     const BIN_ID = '690f2ed2d0ea881f40db9bc3';
-    const MASTER_KEY = '$2a$10$ZR2SSvc5OOu.lIw3Q7XxpuLqrhmnr3nlQa9J7AW8LDxXqkKZuEC1y';
+    const MASTER_KEY = '$2a$10$xnT36sEdgvmYUqMghhjHuuDn.ErHF2gpSRxGohHLUJ5HUg8/Z3XEq';
+    const ACCESS_KEY = '$2a$10$ZR2SSvc5OOu.lIw3Q7XxpuLqrhmnr3nlQa9J7AW8LDxXqkKZuEC1y';
 
     let treeData = null;
     let currentPath = [];
@@ -91,7 +91,6 @@
     let cart = JSON.parse(localStorage.getItem('nsfw-cart') || '[]');
     let copyCounts = JSON.parse(localStorage.getItem('nsfw-copies') || '{}');
 
-    // 显示状态
     function showStatus(msg, isError = false) {
       const el = document.getElementById('status');
       el.textContent = msg;
@@ -104,7 +103,10 @@
     async function loadData() {
       try {
         const res = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`, {
-          headers: { 'X-Master-Key': MASTER_KEY }
+          headers: {
+            'X-Master-Key': MASTER_KEY,
+            'X-Access-Key': ACCESS_KEY
+          }
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         treeData = await res.json();
@@ -139,7 +141,7 @@
       }
     }
 
-    // === 导航树 ===
+    // === 导航与渲染 ===
     function buildNav(node, parent, path=[]) {
       Object.keys(node).forEach(key => {
         const li = document.createElement('li');
@@ -166,7 +168,6 @@
       renderCards();
     }
 
-    // === 渲染卡片 ===
     function formatCount(count) {
       return count >= 1000 ? Math.floor(count / 1000) + 'k' : count;
     }
@@ -221,7 +222,6 @@
       copyCounts[word] = (copyCounts[word] || 0) + 1;
       localStorage.setItem('nsfw-copies', JSON.stringify(copyCounts));
       renderCards();
-      renderCart();
     }
 
     function addToCart(word) {
