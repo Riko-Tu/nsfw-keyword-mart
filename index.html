@@ -193,15 +193,53 @@
       }
     }
 
-    // === Litterbox 上传 ===
-    async function uploadToLitterbox(file) {
-      const form = new FormData();
-      form.append('fileToUpload', file);
-      const res = await fetch('https://litterbox.catbox.moe/resources/internals/api.php', { method: 'POST', body: form });
+// === 修复版上传函数（使用 Catbox 主站 + User-Agent）===
+  async function uploadToLitterbox(file) {
+    const form = new FormData();
+    form.append('fileToUpload', file);
+
+    try {
+      const res = await fetch('https://catbox.moe/user/api.php', {
+        method: 'POST',
+        body: form,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36'
+        }
+      });
+
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`HTTP ${res.status}: ${text}`);
+      }
+
       const url = await res.text();
-      if (url.startsWith('https://files.catbox.moe/')) return url;
-      throw new Error(url || '上传失败');
+      if (url.startsWith('https://files.catbox.moe/')) {
+        return url;
+      } else {
+        throw new Error(url || '上传失败');
+      }
+    } catch (e) {
+      throw new Error('上传失败: ' + e.message);
     }
+  }
+
+  // === 获取 URL 按钮点击事件（保持不变）===
+  document.getElementById('btnUploadImg').onclick = async () => {
+    if (!selectedFile) return;
+    const btn = document.getElementById('btnUploadImg');
+    btn.disabled = true;
+    btn.textContent = '上传中...';
+    try {
+      uploadedUrl = await uploadToLitterbox(selectedFile);
+      document.getElementById('imgPreview').innerHTML = `<img src="${uploadedUrl}">`;
+      showStatus('图片上传成功！');
+      btn.textContent = '已获取';
+    } catch (e) {
+      showStatus(e.message, true);
+      btn.textContent = '获取 URL';
+      btn.disabled = false;
+    }
+  };
 
     // === 级联下拉框（始终显示 + 自动补全）===
     function initCascadeSelects() {
