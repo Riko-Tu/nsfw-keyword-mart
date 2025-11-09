@@ -112,18 +112,14 @@ const UI = {
   currentPath: [], 
   currentItems: [],
 refresh() {
-  console.log('UI.refresh() 开始，Data.local:', Data.local);
+  console.log('UI.refresh() 开始');
   DOM.navTree.innerHTML = '';
 
-  // 安全检查
-  if (!Data.local || typeof Data.local !== 'object' || Data.local === null) {
-    console.warn('Data.local 无效，显示提示');
-    DOM.navTree.innerHTML = '<div style="padding:16px; color:#aaa;">数据加载中或为空</div>';
-    DOM.cardGrid.innerHTML = '<div class="loading">请等待数据加载</div>';
+  if (!Data.local || typeof Data.local !== 'object') {
+    DOM.navTree.innerHTML = '<div style="padding:16px;color:#aaa;">暂无分类</div>';
     return;
   }
 
-  console.log('开始构建导航树...');
   DOM.buildNav(Data.local, DOM.navTree);
   this.initCascade();
   this.goTo([]);
@@ -405,23 +401,35 @@ const DOM = {
     o.textContent = text; 
     parent.appendChild(o); 
   },
-  buildNav(node, parent, path = []) {
-    Object.keys(node).forEach(key => {
-      const li = document.createElement('li');
-      const span = document.createElement('span');
-      span.className = 'folder';
-      span.innerHTML = `<i class="fas fa-folder"></i> ${key}`;
-      span.onclick = () => UI.goTo([...path, key]);
-      li.appendChild(span);
-      if (typeof node[key] === 'object' && !Array.isArray(node[key])) {
-        const ul = document.createElement('ul'); 
-        ul.className = 'sub'; 
-        li.appendChild(ul);
-        DOM.buildNav(node[key], ul, [...path, key]);
-      }
-      parent.appendChild(li);
-    });
+buildNav(node, parent, path = []) {
+  console.log('buildNav 调用，node:', node, 'path:', path);
+
+  // 安全检查
+  if (!node || typeof node !== 'object' || Array.isArray(node)) {
+    console.warn('buildNav 跳过无效节点:', node);
+    return;
   }
+
+  Object.keys(node).forEach(key => {
+    const li = document.createElement('li');
+    const span = document.createElement('span');
+    span.className = 'folder';
+    span.innerHTML = `<i class="fas fa-folder"></i> ${key}`;
+    span.onclick = () => UI.goTo([...path, key]);
+    li.appendChild(span);
+
+    const child = node[key];
+    if (child && typeof child === 'object' && !Array.isArray(child)) {
+      const ul = document.createElement('ul');
+      ul.className = 'sub';
+      li.appendChild(ul);
+      this.buildNav(child, ul, [...path, key]);
+    }
+
+    parent.appendChild(li);
+    console.log(`添加导航项: ${key}`);
+  });
+},
 };
 
 // ---------- Toast ----------
