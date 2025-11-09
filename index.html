@@ -245,64 +245,52 @@ async function uploadToImgBB(file) {
   }
 }
 
-    // === 级联标签 ===
-    function initCascadeSelects() {
-      const l1 = document.getElementById('level1');
-      const l2 = document.getElementById('level2');
-      const l3 = document.getElementById('level3');
+   function initCascadeSelects() {
+  const l1 = document.getElementById('level1');
+  const l2 = document.getElementById('level2');
 
-      l1.innerHTML = '<option value="">一级标签</option>';
-      l2.innerHTML = '<option value="">二级标签</option>';
-      l3.innerHTML = '<option value="">三级标签</option>';
+  l1.innerHTML = '<option value="">一级标签</option>';
+  l2.innerHTML = '<option value="">二级标签</option>';
 
-      const leafPaths = [];
-      function collect(node, path = []) {
-        if (Array.isArray(node)) leafPaths.push([...path]);
-        else if (typeof node === 'object') for (const k in node) collect(node[k], [...path, k]);
+  const level1Set = new Set();
+  const level2Map = {};
+
+  function collect(node, path = []) {
+    if (Array.isArray(node)) {
+      if (path.length >= 2) {
+        const l1 = path[0], l2 = path[1];
+        level1Set.add(l1);
+        if (!level2Map[l1]) level2Map[l1] = new Set();
+        level2Map[l1].add(l2);
       }
-      collect(treeData);
-
-      const level1Set = new Set(), level2Map = {}, level3Map = {};
-      leafPaths.forEach(p => {
-        if (p[0]) level1Set.add(p[0]);
-        if (p[0] && p[1]) { if (!level2Map[p[0]]) level2Map[p[0]] = new Set(); level2Map[p[0]].add(p[1]); }
-        if (p[0] && p[1] && p[2]) { const k = `${p[0]}|${p[1]}`; if (!level3Map[k]) level3Map[k] = new Set(); level3Map[k].add(p[2]); }
-      });
-
-      [...level1Set].sort().forEach(k => { const o = document.createElement('option'); o.value = k; o.textContent = k; l1.appendChild(o); });
-
-      function updateL2() {
-        const v1 = l1.value;
-        l2.innerHTML = '<option value="">二级标签</option>';
-        if (v1 && level2Map[v1]) [...level2Map[v1]].sort().forEach(k => { const o = document.createElement('option'); o.value = k; o.textContent = k; l2.appendChild(o); });
-      }
-
-      function updateL3() {
-        const v1 = l1.value, v2 = l2.value;
-        l3.innerHTML = '<option value="">三级标签</option>';
-        if (v1 && v2 && level3Map[`${v1}|${v2}`]) [...level3Map[`${v1}|${v2}`]].sort().forEach(k => { const o = document.createElement('option'); o.value = k; o.textContent = k; l3.appendChild(o); });
-      }
-
-      l1.onchange = () => { updateL2(); updateL3(); };
-      l2.onchange = () => updateL3();
-
-      l3.onchange = () => {
-        const v3 = l3.value;
-        if (!v3) return;
-        for (const path of leafPaths) {
-          if (path[2] === v3) {
-            l1.value = path[0];
-            updateL2();
-            l2.value = path[1];
-            updateL3();
-            for (const opt of l3.options) if (opt.value === v3) { opt.selected = true; break; }
-            break;
-          }
-        }
-      };
-
-      updateL2(); updateL3();
+    } else if (typeof node === 'object') {
+      for (const k in node) collect(node[k], [...path, k]);
     }
+  }
+  collect(treeData);
+
+  [...level1Set].sort().forEach(k => {
+    const o = document.createElement('option');
+    o.value = k; o.textContent = k;
+    l1.appendChild(o);
+  });
+
+  function updateL2() {
+    const v1 = l1.value;
+    l2.innerHTML = '<option value="">二级标签</option>';
+    if (v1 && level2Map[v1]) {
+      [...level2Map[v1]].sort().forEach(k => {
+        const o = document.createElement('option');
+        o.value = k; o.textContent = k;
+        l2.appendChild(o);
+      });
+    }
+  }
+
+  l1.onchange = updateL2;
+  l2.onchange = () => {}; // 可留空
+  updateL2();
+}
 
     // === 弹窗控制 ===
     function addNewWord() {
@@ -348,77 +336,82 @@ document.getElementById('btnUploadImg').onclick = async () => {
   }
 };
 
-    // === 正确添加逻辑：最后一级就是数组！===
-    function confirmAdd() {
-      const word = document.getElementById('newWord').value.trim();
-      const zh = document.getElementById('newZh').value.trim();
-      const strength = parseFloat(document.getElementById('newStrength').value) || 0.8;
-      const l1 = document.getElementById('level1').value;
-      const l2 = document.getElementById('level2').value;
-      const l3 = document.getElementById('level3').value;
+function confirmAdd() {
+  const word = document.getElementById('newWord').value.trim();
+  const zh = document.getElementById('newZh').value.trim();
+  const strength = parseFloat(document.getElementById('newStrength').value) || 0.8;
+  const l1 = document.getElementById('level1').value;  // 一级：身体部位
+  const l2 = document.getElementById('level2').value;  // 二级：胸部
 
-      if (!word) return showToast('英文关键词不能为空！', 'error');
-      if (!l1)   return showToast('请至少选择一级标签！', 'error');
+  if (!word) return showToast('英文关键词不能为空！', 'error');
+  if (!l1) return showToast('请选择一级标签！', 'error');
 
-      const path = [l1];
-      if (l2) path.push(l2);
-      if (l3) path.push(l3);
+  // 构建路径：只支持两层
+  const path = [l1];
+  if (l2) path.push(l2);
 
-      // 遍历到倒数第二级
-      let node = treeData;
-      for (let i = 0; i < path.length - 1; i++) {
-        const key = path[i];
-        if (!node[key] || typeof node[key] !== 'object' || Array.isArray(node[key])) {
-          return showToast(`路径错误：${path.slice(0, i + 1).join(' → ')} 不是文件夹`, 'error');
-        }
-        node = node[key];
-      }
+  let node = treeData;
 
-      const targetKey = path[path.length - 1];
-      if (!node[targetKey]) return showToast(`标签 "${targetKey}" 不存在！`, 'error');
-      // if (!Array.isArray(node[targetKey])) return showToast(`"${targetKey}" 不是关键词列表！`, 'error');
-
-      node[targetKey].push({
-        "词": word,
-        "强度": strength,
-        "图": uploadedUrl,
-        "复制": 0,
-        "词2": zh
-      });
-
-      renderCards();
-      saveData();
-      closeModal();
-      showToast('关键词添加成功！');
+  // 1. 走到倒数第二级（一级分类）
+  for (let i = 0; i < path.length - 1; i++) {
+    const key = path[i];
+    if (!node[key] || typeof node[key] !== 'object' || Array.isArray(node[key])) {
+      return showToast(`"${key}" 不是分类文件夹`, 'error');
     }
+    node = node[key];
+  }
+
+  const targetKey = path[path.length - 1];  // 最后一级：如 "胸部"
+
+  // 2. 确保 targetKey 是数组
+  if (!node[targetKey]) {
+    node[targetKey] = [];  // 自动创建
+  } else if (!Array.isArray(node[targetKey])) {
+    return showToast(`"${targetKey}" 必须是关键词列表（数组）`, 'error');
+  }
+
+  // 3. 添加关键词
+  node[targetKey].push({
+    "词": word,
+    "强度": strength,
+    "图": uploadedUrl || '',
+    "复制": 0,
+    "词2": zh
+  });
+
+  renderCards();
+  saveData();
+  closeModal();
+  showToast('关键词添加成功！');
+}
 
     // === 其余函数 ===
-    function buildNav(node, parent, path=[]) {
-      Object.keys(node).forEach(key => {
-        const li = document.createElement('li');
-        const span = document.createElement('span');
-        span.className = 'folder';
-        span.innerHTML = `<i class="fas fa-folder"></i> ${key}`;
-        span.onclick = () => goTo([...path, key]);
-        li.appendChild(span);
-        if (typeof node[key] === 'object' && !Array.isArray(node[key])) {
-          const ul = document.createElement('ul');
-          ul.className = 'sub';
-          li.appendChild(ul);
-          buildNav(node[key], ul, [...path, key]);
-        }
-        parent.appendChild(li);
-      });
-    }
+function buildNav(node, parent, path = []) {
+  Object.keys(node).forEach(key => {
+    const li = document.createElement('li');
+    const span = document.createElement('span');
+    span.className = 'folder';
+    span.innerHTML = `<i class="fas fa-folder"></i> ${key}`;
+    span.onclick = () => goTo([...path, key]);
+    li.appendChild(span);
 
-    function goTo(path) {
-      currentPath = path;
-      let node = treeData;
-      path.forEach(p => node = node[p]);
-      currentItems = Array.isArray(node) ? node.map(w => typeof w === 'string' ? {词:w} : w) : [];
-      renderCards();
+    if (typeof node[key] === 'object' && !Array.isArray(node[key])) {
+      const ul = document.createElement('ul');
+      ul.className = 'sub';
+      li.appendChild(ul);
+      buildNav(node[key], ul, [...path, key]);
     }
+    parent.appendChild(li);
+  });
+}
 
+function goTo(path) {
+  currentPath = path;
+  let node = treeData;
+  path.forEach(p => node = node[p]);
+  currentItems = Array.isArray(node) ? node.map(w => typeof w === 'string' ? {词: w} : w) : [];
+  renderCards();
+}
     function renderCards() {
       if (!treeData) return;
       const order = document.getElementById('sortOrder').value;
