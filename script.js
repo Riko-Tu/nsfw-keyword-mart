@@ -6,57 +6,30 @@ const MASTER_KEY = '$2a$10$xnT36sEdgvmYUqMghhjHuuDn.ErHF2gpSRxGohHLUJ5HUg8/Z3XEq
 const Data = {
   local: {},
  async load() {
-  console.log('Data.load() 开始执行');
+  console.log('Data.load() 开始');
   try {
     const res = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`, {
       headers: { 'X-Master-Key': MASTER_KEY }
     });
     const json = await res.json();
-    console.log('JSONBin 返回原始数据:', json);
+    console.log('JSONBin 返回:', json);
 
-    // 关键修复：安全提取 record
-    let record = json.record;
-    console.log('提取 record:', record);
-
-    // 防止 record 为 null/undefined
-    if (record === null || record === undefined) {
-      console.warn('record 为 null，初始化为空对象');
-      record = {};
-    }
-
-    // 兼容旧数组结构
-    if (Array.isArray(record)) {
-      console.warn('检测到旧数组结构，自动转换');
-      record = {
-        "导入数据": {
-          "默认分类": record.map(item => ({
-            "词": item.词 || item,
-            "词2": item.词2 || "",
-            "强度": item.强度 || 0.8,
-            "图": item.图 || "",
-            "复制": item.复制 || 0
-          }))
-        }
-      };
-      console.log('数组转换后 record:', record);
-    }
-
-    // 确保是对象
-    if (typeof record !== 'object' || Array.isArray(record)) {
-      console.error('record 不是有效对象，强制初始化');
-      record = {};
+    // 关键：直接提取 record，不判断空
+    const record = json.record;
+    if (!record || typeof record !== 'object') {
+      console.error('record 无效:', record);
+      Toast.error('数据结构错误');
+      return;
     }
 
     this.local = record;
-    console.log('最终 this.local:', this.local);
+    console.log('成功加载 this.local:', this.local);
 
     UI.refresh();
     Toast.show('云端数据已加载');
   } catch (e) {
-    console.error('Data.load() 失败:', e);
+    console.error('加载失败:', e);
     Toast.error('加载失败: ' + e.message);
-    this.local = {};
-    UI.refresh();
   }
 },
   
@@ -130,14 +103,7 @@ const Data = {
   },
   // 一键初始化空结构（可选）
   initEmpty() {
-    this.local = {
-      "身体部位": { "胸部": [], "腿部": [], "臀部": [] },
-      "服装": { "泳装": [], "内衣": [], "丝袜": [] },
-      "姿势": { "站姿": [], "坐姿": [], "躺姿": [] }
-    };
-    this.sync();
-    UI.refresh();
-    Toast.show('已初始化标准空结构');
+
   }
 };
 
