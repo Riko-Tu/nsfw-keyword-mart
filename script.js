@@ -6,46 +6,54 @@ const MASTER_KEY = '$2a$10$xnT36sEdgvmYUqMghhjHuuDn.ErHF2gpSRxGohHLUJ5HUg8/Z3XEq
 const Data = {
   local: {},
   async load() {
-    try {
-      const res = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`, { 
-        headers: { 'X-Master-Key': MASTER_KEY } 
-      });
-      const json = await res.json();
+  try {
+    const res = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`, {
+      headers: { 'X-Master-Key': MASTER_KEY }
+    });
+    const json = await res.json();
 
-      // 关键修复：提取 record 字段
-      let data = json.record || {};
+    // 关键修复：安全提取 record
+    let record = json.record;
 
-      // 容错：如果是数组，自动转换
-      if (Array.isArray(data)) {
-        console.warn('检测到旧版数组结构，自动转换为标准嵌套结构');
-        data = {
-          "导入数据": {
-            "默认分类": data.map(item => ({
-              "词": item.词 || item,
-              "词2": item.词2 || "",
-              "强度": item.强度 || 0.8,
-              "图": item.图 || "",
-              "复制": item.复制 || 0
-            }))
-          }
-        };
-      }
-
-  let record = json.record;
-
-// 防止 record 为 null/undefined/非对象
-if (!record || typeof record !== 'object' || Array.isArray(record)) {
-  record = Array.isArray(record) ? { "导入数据": { "默认分类": record.map(w => ({词: w.词||w, 词2: w.词2||'', 强度: w.强度||0.8, 图: w.图||'', 复制: w.复制||0})) } } : {};
-}
-
-this.local = record;
-      UI.refresh();
-      Toast.show('云端数据已加载');
-    } catch (e) { 
-      Toast.error('加载失败: ' + e.message);
-      console.error(e);
+    // 防止 record 为 null/undefined
+    if (record === null || record === undefined) {
+      console.warn('record 为 null，初始化为空对象');
+      record = {};
     }
-  },
+
+    // 兼容旧数组结构
+    if (Array.isArray(record)) {
+      console.warn('检测到旧数组结构，自动转换');
+      record = {
+        "导入数据": {
+          "默认分类": record.map(item => ({
+            "词": item.词 || item,
+            "词2": item.词2 || "",
+            "强度": item.强度 || 0.8,
+            "图": item.图 || "",
+            "复制": item.复制 || 0
+          }))
+        }
+      };
+    }
+
+    // 确保是对象
+    if (typeof record !== 'object' || Array.isArray(record)) {
+      record = {};
+    }
+
+    this.local = record;
+    UI.refresh();
+    Toast.show('云端数据已加载');
+  } catch (e) {
+    Toast.error('加载失败: ' + e.message);
+    console.error(e);
+    // 即使失败也初始化空结构
+    this.local = {};
+    UI.refresh();
+  }
+},
+  
   async sync() {
     try {
       await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}`, {
