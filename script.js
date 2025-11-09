@@ -7,26 +7,57 @@ const Data = {
   local: {},
   async load() {
     try {
-      const res = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`, { headers: { 'X-Master-Key': MASTER_KEY } });
-      this.local = await res.json();
+      const res = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`, { 
+        headers: { 'X-Master-Key': MASTER_KEY } 
+      });
+      const json = await res.json();
+
+      // 关键修复：提取 record 字段
+      let data = json.record || {};
+
+      // 容错：如果是数组，自动转换
+      if (Array.isArray(data)) {
+        console.warn('检测到旧版数组结构，自动转换为标准嵌套结构');
+        data = {
+          "导入数据": {
+            "默认分类": data.map(item => ({
+              "词": item.词 || item,
+              "词2": item.词2 || "",
+              "强度": item.强度 || 0.8,
+              "图": item.图 || "",
+              "复制": item.复制 || 0
+            }))
+          }
+        };
+      }
+
+      this.local = data;
       UI.refresh();
       Toast.show('云端数据已加载');
-    } catch (e) { Toast.error('加载失败: ' + e.message); }
+    } catch (e) { 
+      Toast.error('加载失败: ' + e.message);
+      console.error(e);
+    }
   },
   async sync() {
     try {
       await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', 'X-Master-Key': MASTER_KEY },
-        body: JSON.stringify(this.local)
+        body: JSON.stringify({ record: this.local })  // 只上传 record
       });
       Toast.show('已同步到云端');
-    } catch (e) { Toast.error('同步失败'); }
+    } catch (e) { 
+      Toast.error('同步失败: ' + e.message);
+    }
   },
   export() {
     const blob = new Blob([JSON.stringify(this.local, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = 'nsfw-keywords.json'; a.click();
+    const a = document.createElement('a'); 
+    a.href = url; 
+    a.download = 'nsfw-keywords.json'; 
+    a.click();
     URL.revokeObjectURL(url);
     Toast.show('已导出');
   },
@@ -35,8 +66,14 @@ const Data = {
     if (!file) return;
     const reader = new FileReader();
     reader.onload = ev => {
-      try { this.local = JSON.parse(ev.target.result); UI.refresh(); Toast.show('已导入'); }
-      catch { Toast.error('JSON 格式错误'); }
+      try { 
+        const imported = JSON.parse(ev.target.result);
+        this.local = imported.record || imported;  // 兼容 record 包裹
+        UI.refresh(); 
+        Toast.show('已导入'); 
+      } catch { 
+        Toast.error('JSON 格式错误'); 
+      }
     };
     reader.readAsText(file);
   },
@@ -48,20 +85,51 @@ const Data = {
     const l2 = document.getElementById('level2').value;
     if (!word || !l1) return Toast.error('关键词和一级标签必填');
 
-    const path = [l1]; if (l2) path.push(l2);
+    const path = [l1]; 
+    if (l2) path.push(l2);
+    
     let node = this.local;
-    for (let i = 0; i < path.length - 1; i++) { const k = path[i]; node[k] = node[k] || {}; node = node[k]; }
+    for (let i = 0; i < path.length - 1; i++) { 
+      const k = path[i]; 
+      node[k] = node[k] || {}; 
+      node = node[k]; 
+    }
     const target = path[path.length - 1];
     node[target] = node[target] || [];
-    node[target].push({ "词": word, "词2": zh, "强度": strength, "图": Cart.uploadedUrl || '', "复制": 0 });
-    UI.renderCards(); UI.closeModal('addModal'); Toast.show('已添加');
+    node[target].push({ 
+      "词": word, 
+      "词2": zh, 
+      "强度": strength, 
+      "图": Cart.uploadedUrl || '', 
+      "复制": 0 
+    });
+    UI.renderCards(); 
+    UI.closeModal('addModal'); 
+    Toast.show('已添加');
+  },
+  // 一键初始化空结构（可选）
+  initEmpty() {
+    this.local = {
+      "身体部位": { "胸部": [], "腿部": [], "臀部": [] },
+      "服装": { "泳装": [], "内衣": [], "丝袜": [] },
+      "姿势": { "站姿": [], "坐姿": [], "躺姿": [] }
+    };
+    this.sync();
+    UI.refresh();
+    Toast.show('已初始化标准空结构');
   }
 };
 
 // ---------- UI ----------
 const UI = {
-  currentPath: [], currentItems: [],
-  refresh() { DOM.navTree.innerHTML = ''; DOM.buildNav(Data.local, DOM.navTree); this.initCascade(); this.goTo([]); },
+  currentPath: [], 
+  currentItems: [],
+  refresh() { 
+    DOM.navTree.innerHTML = ''; 
+    DOM.buildNav(Data.local, DOM.navTree); 
+    this.initCascade(); 
+    this.goTo([]); 
+  },
   initCascade() {
     const paths = this.collectPaths();
     DOM.level1.innerHTML = '<option value="">一级标签</option>';
@@ -76,10 +144,19 @@ const UI = {
   collectPaths() {
     const l1 = new Set(), l2 = {};
     const walk = (node, path) => {
-      if (Array.isArray(node) && path.length >= 2) { l1.add(path[0]); l2[path[0]] = l2[path[0]] || new Set(); l2[path[0]].add(path[1]); }
-      else if (typeof node === 'object' && node) for (const k in node) walk(node[k], [...path, k]);
+      if (Array.isArray(node) && path.length >= 2) { 
+        l1.add(path[0]); 
+        l2[path[0]] = l2[path[0]] || new Set(); 
+        l2[path[0]].add(path[1]); 
+      } else if (typeof node === 'object' && node) {
+        for (const k in node) walk(node[k], [...path, k]);
+      }
     };
-    walk(Data.local); return { l1: [...l1].sort(), l2: Object.fromEntries(Object.entries(l2).map(([k, v]) => [k, [...v].sort()])) };
+    walk(Data.local); 
+    return { 
+      l1: [...l1].sort(), 
+      l2: Object.fromEntries(Object.entries(l2).map(([k, v]) => [k, [...v].sort()])) 
+    };
   },
   goTo(path) {
     this.currentPath = path;
@@ -112,27 +189,69 @@ const UI = {
       </div>`;
     }).join('') : '<div class="loading">请选择左侧分类</div>';
   },
-  openAddModal() { DOM.addModal.style.display = 'flex'; this.initCascade(); },
-  closeModal(id) { document.getElementById(id).style.display = 'none'; }
+  openAddModal() { 
+    DOM.addModal.style.display = 'flex'; 
+    this.initCascade(); 
+  },
+  closeModal(id) { 
+    document.getElementById(id).style.display = 'none'; 
+  }
 };
 
 // ---------- Cart ----------
 const Cart = {
   uploadedUrl: '',
-  add(word) { if (!Storage.cart.includes(word)) { Storage.cart.push(word); Storage.saveCart(); Cart.updateUI(); Toast.show(`已加入: ${word}`); } else Toast.show('已在购物车'); },
-  remove(i) { Storage.cart.splice(i, 1); Storage.saveCart(); Cart.renderList(); Cart.updateCount(); },
-  clear() { Storage.cart = []; Storage.saveCart(); Cart.renderList(); Cart.updateCount(); Toast.show('购物车已清空'); },
+  add(word) { 
+    if (!Storage.cart.includes(word)) { 
+      Storage.cart.push(word); 
+      Storage.saveCart(); 
+      Cart.updateUI(); 
+      Toast.show(`已加入: ${word}`); 
+    } else Toast.show('已在购物车'); 
+  },
+  remove(i) { 
+    Storage.cart.splice(i, 1); 
+    Storage.saveCart(); 
+    Cart.renderList(); 
+    Cart.updateCount(); 
+  },
+  clear() { 
+    Storage.cart = []; 
+    Storage.saveCart(); 
+    Cart.renderList(); 
+    Cart.updateCount(); 
+    Toast.show('购物车已清空'); 
+  },
   copyAll() {
     if (!Storage.cart.length) return Toast.show('购物车为空');
-    navigator.clipboard.writeText(Storage.cart.join(', ')).then(() => { Cart.recordHistory(); Toast.show(`已复制 ${Storage.cart.length} 个`); });
+    navigator.clipboard.writeText(Storage.cart.join(', ')).then(() => { 
+      Cart.recordHistory(); 
+      Toast.show(`已复制 ${Storage.cart.length} 个`); 
+    });
   },
   recordHistory() {
-    Storage.history.unshift({ time: new Date().toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }), items: [...Storage.cart] });
+    Storage.history.unshift({ 
+      time: new Date().toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }), 
+      items: [...Storage.cart] 
+    });
     if (Storage.history.length > 20) Storage.history.pop();
-    Storage.saveHistory(); Cart.renderList();
+    Storage.saveHistory(); 
+    Cart.renderList();
   },
-  saveToHistory() { if (Storage.cart.length) { Cart.recordHistory(); Toast.show('已加入历史'); } },
-  clearHistory() { if (confirm('清空历史？')) { Storage.history = []; Storage.saveHistory(); Cart.renderList(); Toast.show('历史已清空'); } },
+  saveToHistory() { 
+    if (Storage.cart.length) { 
+      Cart.recordHistory(); 
+      Toast.show('已加入历史'); 
+    } 
+  },
+  clearHistory() { 
+    if (confirm('清空历史？')) { 
+      Storage.history = []; 
+      Storage.saveHistory(); 
+      Cart.renderList(); 
+      Toast.show('历史已清空'); 
+    } 
+  },
   toggle() {
     const panel = DOM.cartPanel, body = DOM.cartBody, actions = DOM.cartActions, mid = DOM.midActions, arrow = DOM.cartArrow;
     const expanded = body.style.display === 'block';
@@ -141,11 +260,23 @@ const Cart = {
     arrow.className = expanded ? 'fas fa-chevron-up' : 'fas fa-chevron-down';
     if (!expanded) Cart.renderList();
   },
-  toggleHistory() { event.stopPropagation(); const s = DOM.historySection; s.style.display = s.style.display === 'none' ? 'block' : 'none'; },
-  openDraw() { event.stopPropagation(); DOM.drawModal.style.display = 'flex'; Cart.renderDrawTags(); },
+  toggleHistory() { 
+    event.stopPropagation(); 
+    const s = DOM.historySection; 
+    s.style.display = s.style.display === 'none' ? 'block' : 'none'; 
+  },
+  openDraw() { 
+    event.stopPropagation(); 
+    DOM.drawModal.style.display = 'flex'; 
+    Cart.renderDrawTags(); 
+  },
   renderDrawTags() {
     const paths = [];
-    for (const cat in Data.local) for (const group in Data.local[cat]) if (Array.isArray(Data.local[cat][group]) && Data.local[cat][group].length) paths.push({cat, group});
+    for (const cat in Data.local) for (const group in Data.local[cat]) {
+      if (Array.isArray(Data.local[cat][group]) && Data.local[cat][group].length) {
+        paths.push({cat, group});
+      }
+    }
     DOM.drawTags.innerHTML = paths.map(p => `
       <div style="display:flex; align-items:center; padding:8px; background:#222; border-radius:6px; margin-bottom:6px;">
         <input type="checkbox" value="${p.cat}>${p.group}">
@@ -157,7 +288,10 @@ const Cart = {
     const checked = Array.from(DOM.drawTags.querySelectorAll('input:checked'));
     if (!checked.length) return Toast.error('请选择标签');
     const candidates = [];
-    checked.forEach(cb => { const [cat, group] = cb.value.split('>'); Data.local[cat][group].forEach(w => w.词 && candidates.push(w.词)); });
+    checked.forEach(cb => { 
+      const [cat, group] = cb.value.split('>'); 
+      Data.local[cat][group].forEach(w => w.词 && candidates.push(w.词)); 
+    });
     if (!candidates.length) return Toast.error('无词可抽');
     const word = candidates[Math.floor(Math.random() * candidates.length)];
     DOM.drawResult.innerHTML = `${word}`;
@@ -165,7 +299,9 @@ const Cart = {
     setTimeout(() => DOM.drawResult.style.animation = '', 500);
     Cart.add(word);
   },
-  updateCount() { DOM.cartCount.textContent = Storage.cart.length; },
+  updateCount() { 
+    DOM.cartCount.textContent = Storage.cart.length; 
+  },
   renderList() {
     const list = DOM.cartList, hist = DOM.cartHistoryList, sec = DOM.historySection;
     list.innerHTML = Storage.cart.length ? Storage.cart.map((w, i) => {
@@ -175,11 +311,17 @@ const Cart = {
     sec.style.display = Storage.history.length ? 'block' : 'none';
     hist.innerHTML = Storage.history.map(h => `<div class="cart-history-item"><div class="time">${h.time}</div><div style="margin-top:2px;color:#ccc;">${h.items.join(', ')}</div></div>`).join('');
   },
-  updateUI() { Cart.updateCount(); if (DOM.cartBody.style.display === 'block') Cart.renderList(); },
+  updateUI() { 
+    Cart.updateCount(); 
+    if (DOM.cartBody.style.display === 'block') Cart.renderList(); 
+  },
   findItem(word) {
     for (const cat in Data.local) for (const group in Data.local[cat]) {
       const arr = Data.local[cat][group];
-      if (Array.isArray(arr)) { const found = arr.find(w => (w.词 || w) === word); if (found) return found; }
+      if (Array.isArray(arr)) { 
+        const found = arr.find(w => (w.词 || w) === word); 
+        if (found) return found; 
+      }
     }
     return null;
   }
@@ -220,7 +362,12 @@ const DOM = {
   cartList: document.getElementById('cartList'),
   historySection: document.getElementById('historySection'),
   cartHistoryList: document.getElementById('cartHistoryList'),
-  addOption(parent, value, text) { const o = document.createElement('option'); o.value = value; o.textContent = text; parent.appendChild(o); },
+  addOption(parent, value, text) { 
+    const o = document.createElement('option'); 
+    o.value = value; 
+    o.textContent = text; 
+    parent.appendChild(o); 
+  },
   buildNav(node, parent, path = []) {
     Object.keys(node).forEach(key => {
       const li = document.createElement('li');
@@ -230,7 +377,9 @@ const DOM = {
       span.onclick = () => UI.goTo([...path, key]);
       li.appendChild(span);
       if (typeof node[key] === 'object' && !Array.isArray(node[key])) {
-        const ul = document.createElement('ul'); ul.className = 'sub'; li.appendChild(ul);
+        const ul = document.createElement('ul'); 
+        ul.className = 'sub'; 
+        li.appendChild(ul);
         DOM.buildNav(node[key], ul, [...path, key]);
       }
       parent.appendChild(li);
@@ -247,9 +396,13 @@ const Toast = {
     t.className = `toast ${type === 'error' ? 'error' : ''}`;
     t.textContent = msg;
     document.body.appendChild(t);
-    requestAnimationFrame(() => { t.style.opacity = 1; t.style.transform = 'translateX(0)'; });
+    requestAnimationFrame(() => { 
+      t.style.opacity = 1; 
+      t.style.transform = 'translateX(0)'; 
+    });
     setTimeout(() => {
-      t.style.opacity = 0; t.style.transform = 'translateX(100%)';
+      t.style.opacity = 0; 
+      t.style.transform = 'translateX(100%)';
       t.addEventListener('transitionend', () => t.remove());
     }, 3000);
   }
@@ -265,20 +418,34 @@ document.getElementById('btnUploadImg').onclick = async () => {
   const file = document.getElementById('imgUpload').files[0];
   if (!file) return;
   const btn = document.getElementById('btnUploadImg');
-  btn.disabled = true; btn.textContent = '上传中...';
+  btn.disabled = true; 
+  btn.textContent = '上传中...';
   try {
     let API_KEY = localStorage.getItem('imgbb_api_key');
-    if (!API_KEY) { API_KEY = prompt('请输入 ImgBB API Key:'); if (API_KEY) localStorage.setItem('imgbb_api_key', API_KEY); }
-    const form = new FormData(); form.append('image', file);
+    if (!API_KEY) { 
+      API_KEY = prompt('请输入 ImgBB API Key:'); 
+      if (API_KEY) localStorage.setItem('imgbb_api_key', API_KEY); 
+    }
+    const form = new FormData(); 
+    form.append('image', file);
     const res = await fetch(`https://api.imgbb.com/1/upload?key=${API_KEY}`, { method: 'POST', body: form });
     const data = await res.json();
     if (data.success) {
       Cart.uploadedUrl = data.data.url;
       const medium = data.data.url.replace(/\/[^/]+$/, '/medium/$&');
       document.getElementById('imgPreview').innerHTML = `<img src="${medium}" style="max-height:140px;">`;
-      btn.textContent = '已获取'; Toast.show('上传成功');
+      btn.textContent = '已获取'; 
+      Toast.show('上传成功');
     } else throw new Error(data.error?.message || '上传失败');
-  } catch (e) { Toast.error(e.message); btn.textContent = '重新上传'; btn.disabled = false; }
+  } catch (e) { 
+    Toast.error(e.message); 
+    btn.textContent = '重新上传'; 
+    btn.disabled = false; 
+  }
 };
 
-window.addEventListener('load', () => { Data.load(); Cart.updateUI(); });
+// 页面加载
+window.addEventListener('load', () => { 
+  Data.load(); 
+  Cart.updateUI(); 
+});
