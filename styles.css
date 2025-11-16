@@ -433,6 +433,55 @@ body {
   gap: 6px;
   margin-top: 8px;
 }
+
+/* 词组卡片布局样式 */
+.group-card {
+  height: auto;
+  min-height: 180px;
+  padding: 16px;
+}
+
+.card-header {
+  margin-bottom: 12px;
+}
+
+.card-content {
+  margin: 12px 0;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.group-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 0;
+}
+
+.group-item-word {
+  font-weight: 600;
+  color: #fff;
+  min-width: 120px;
+  flex-shrink: 0;
+}
+
+.group-item-meaning {
+  color: #ccc;
+  font-size: 0.9rem;
+}
+
+.card-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
 .cart-item-main {
   display: flex;
   flex-direction: column;

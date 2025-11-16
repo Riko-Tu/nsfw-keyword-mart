@@ -366,11 +366,21 @@ function openSettingsModal() {
   }
 
   renderSettingsModalBody();
-  document.getElementById('settingsModal').classList.add('show');
+  const settingsModal = document.getElementById('settingsModal');
+  if (settingsModal) {
+    settingsModal.classList.add('show');
+  } else {
+    console.error('设置弹窗元素未找到');
+  }
 }
 
 function closeSettingsModal() {
-  document.getElementById('settingsModal').classList.remove('show');
+  const settingsModal = document.getElementById('settingsModal');
+  if (settingsModal) {
+    settingsModal.classList.remove('show');
+  } else {
+    console.error('设置弹窗元素未找到');
+  }
 
   // 关闭后恢复到打开前的页面
   if (lastTabBeforeOpen && currentTab !== lastTabBeforeOpen) {
@@ -385,6 +395,10 @@ function closeSettingsModal() {
 // 渲染弹窗中的所有二级标签（按一级分类分组）
 function renderSettingsModalBody() {
   const body = document.getElementById('settingsBody');
+  if (!body) {
+    console.error('设置弹窗内容容器未找到');
+    return;
+  }
   if (!rawData || Object.keys(rawData).length === 0) {
     body.innerHTML = '<div style="color:#ccc">数据尚未加载</div>';
     return;
@@ -481,19 +495,32 @@ function renderGroups(data) {
     const count = g.items.length;
     const gJson = JSON.stringify(g).replace(/"/g, '&quot;');
 
+    // 生成items列表HTML，展示词和词2
+    const itemsHtml = (g.items || []).map((item, index) => `
+      <div class="group-item" ${index < count - 1 ? 'style="margin-bottom: 8px;"' : ''}>
+        <span class="group-item-word">${item.word}</span>
+        <span class="group-item-meaning">${item.meaning || ''}</span>
+      </div>
+    `).join('');
+
     return `
       <div class="card group-card">
-        <div class="card-left">
+        <div class="card-header">
           <div class="word">${g.title}</div>
-          <div class="meaning">${g.description || ''}</div>
-          <div class="note">包含 ${count} 个词</div>
           <div class="card-tags">${tagsHtml}</div>
         </div>
-        <div class="card-actions">
-          <button class="icon-btn btn-copy" onclick="copyGroup(${gJson})" title="复制组内词为一行">
-            <i class="fas fa-copy"></i>
-          </button>
-          <!-- 移除“加入购物车”按钮，确保词组页不涉及购物车 -->
+        
+        <div class="card-content">
+          ${itemsHtml}
+        </div>
+        
+        <div class="card-footer">
+          <div class="note">共 ${count} 个词</div>
+          <div class="card-actions">
+            <button class="icon-btn btn-copy" onclick="copyGroup(${gJson})" title="复制组内词为一行">
+              <i class="fas fa-copy"></i>
+            </button>
+          </div>
         </div>
       </div>
     `;

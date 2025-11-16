@@ -64,6 +64,22 @@
   <!-- Toast -->
   <div id="toast" class="toast"></div>
 
+  <!-- 设置弹窗 -->
+  <div id="settingsModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>选择抽词标签</h3>
+        <button class="modal-close" onclick="closeSettingsModal()">×</button>
+      </div>
+      <div class="modal-body" id="settingsBody">
+        <!-- 标签内容将通过JavaScript动态生成 -->
+      </div>
+      <div class="modal-footer">
+        <button class="btn-save" onclick="saveSettings()">保存</button>
+      </div>
+    </div>
+  </div>
+
   <script src="app.js"></script>
 </body>
 </html>
